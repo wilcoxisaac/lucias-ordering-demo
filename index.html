@@ -48,7 +48,7 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .chev{width:20px;height:20px;border-radius:50%;background:var(--line2);display:inline-grid;place-items:center;font-size:11px;color:var(--muted)}
 .vr{width:1px;height:28px;background:var(--line);align-self:center}
 .menuBtn,.cartIcon{display:none}
-.dd{position:absolute;top:64px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(20,30,40,.12);min-width:200px;padding:6px 0;z-index:40}
+.dd{position:absolute;top:64px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(20,30,40,.12);min-width:200px;padding:6px 0;z-index:90}
 .dd button{display:flex;width:100%;padding:10px 16px;font-size:14.5px;color:var(--ink);text-align:left;gap:10px;align-items:center}
 .dd button:hover{background:var(--alt)}
 .dd button[disabled]{color:var(--disabled);cursor:not-allowed}
@@ -297,9 +297,9 @@ footer .f2 a{color:var(--muted)}
 
 <div class="obar">
   <div class="wrap">
-    <button class="ofield showM" id="mDetails"><span><small>Order details</small><b id="mDetailsTxt">Pickup</b></span><span class="chev">›</span></button>
+    <button class="ofield showM" id="mDetails"><span><small>Order details</small><b id="mDetailsTxt">Take Out</b></span><span class="chev">›</span></button>
     <button class="ofield" id="catBtn" aria-haspopup="listbox"><span><small>Category</small><b id="catLbl">Family Meal Deals</b></span><span class="chev">⌄</span></button>
-    <button class="ofield hideM" id="typeBtn" aria-haspopup="listbox"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg><span><small>Order type</small><b>Pickup</b></span><span class="chev">⌄</span></button>
+    <button class="ofield hideM" id="typeBtn" aria-haspopup="listbox"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg><span><small>Order type</small><b id="typeLbl">Take Out</b></span><span class="chev">⌄</span></button>
     <button class="ofield hideM" id="timeBtn" aria-haspopup="listbox"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span><small>Order time</small><b id="timeLbl">ASAP (25-40min)</b></span><span class="chev">⌄</span></button>
     <span class="spacer"></span>
     <button class="cartBtn empty" id="cartBtn" aria-label="Cart total $0.00, item count 0"><span class="seg1">🛒 <span id="cartCount">0 Items</span></span><span class="seg2 num" id="cartTotal">$0.00</span></button>
@@ -338,7 +338,7 @@ const IMPROVEMENTS = {
   5:["Clean choices","Kitchen shorthand removed, typos fixed, pasta add-ons in one list with steppers.","talech: variations and add-ons from the POS item setup"],
   6:["Add a side or dessert","Entrées carry an optional add-on group for a side salad, cannoli or tiramisu.","talech: add-on modifier group on the item"],
   7:["Banner announcement","Promotes Family Meal Deals and the catering lead time.","talech: Banner announcement (Website settings)"],
-  8:["Apple Pay or pay in store","Card or Apple Pay online, or pay at pickup.","talech: Payment options per order type; Apple Pay via Converge"],
+  8:["Apple Pay or pay in store","Card or Apple Pay online, or pay in store (per order type; Delivery is set to pay online).","talech: Payment options per order type; Apple Pay via Converge"],
   9:["Tip, promo code, gift card","Tip presets at checkout, promo codes, and talech gift cards.","talech: standard checkout"],
   10:["Order status and emails","Order number, ready time, status tracking, and an email when the order is ready.","talech: order status page and customer emails"],
   11:["Orders land in the register","Online orders arrive in the talech Register Online queue; staff accept and send to the kitchen.","talech: New Online Orders alert, Manually/Auto approve, Auto-send to kitchen"]
@@ -375,6 +375,37 @@ const priceLabel = i => i.v.length ? money(Math.min(...i.v.map(v=>v.p))) + "+" :
 /* ---------- State ---------- */
 let cart = store.get("lucia2.cart", []);
 let schedule = null;   // null = ASAP, else {day,label,t}
+/* Order types: each is a talech order type the merchant enables in Online Ordering Settings; the label is the merchant's own name for it. Only one can be selected. */
+const OTYPES = [
+  {k:"dinein",   l:"Dine In",              kind:"dinein"},
+  {k:"takeout",  l:"Take Out",             kind:"pickup"},
+  {k:"catering", l:"Catering for Pick Up", kind:"pickup"},
+  {k:"delivery", l:"Delivery",             kind:"delivery"},
+  {k:"curbside", l:"Curbside",             kind:"curbside"}
+];
+let otype = store.get("lucia2.otype", "takeout"); if (!OTYPES.some(o=>o.k===otype)) otype = "takeout";
+let tableNo = store.get("lucia2.table", ""), delivAddr = store.get("lucia2.addr", ""), delivNote = "";
+const OT = () => OTYPES.find(o=>o.k===otype);
+function otDetail(){ const o=OT(); return o.kind==="dinein" ? (tableNo?`Table ${tableNo}`:"No table number entered") : o.kind==="delivery" ? (delivAddr||"No address selected") : ""; }
+function setOtype(k, after){
+  const o = OTYPES.find(x=>x.k===k); if (!o) return;
+  const done = () => { otype = k; store.set("lucia2.otype", otype); if (o.kind!=="delivery" && payMode==="none") payMode="online"; if (o.kind==="delivery") payMode="online"; refreshHours(); after ? after() : closeLayer(); };
+  if (o.kind==="dinein") return askField({title:"Dine In", heading:"Enter your table number", ph:"Table number", help:"If you are unable to find your table number, please ask an employee for more information", val:tableNo, btn:"Done", ok:v=>{ tableNo=v; store.set("lucia2.table", v); done(); }, cancel:after});
+  if (o.kind==="delivery") return askField({title:"Delivery Address", heading:"Deliver to", ph:"Enter delivery address", help:"Delivery is available within the delivery area Lucia's sets in talech.", val:delivAddr, btn:"Deliver to this address", ok:v=>{ delivAddr=v; store.set("lucia2.addr", v); done(); }, cancel:after});
+  done();
+}
+function askField(c){
+  $("#layer").innerHTML = `<div class="scrim" id="scrim"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="fTitle" style="width:min(460px,100%)">
+    <button class="xbtn" id="fX" aria-label="Close">×</button>
+    <div class="scroll"><div class="head noimg"><h2 id="fTitle">${esc(c.title)}</h2></div>
+      <div class="grp" style="border:0"><b style="font-weight:600">${esc(c.heading)}</b><input class="in" id="fIn" style="margin:10px 0 6px" placeholder="${esc(c.ph)}" value="${esc(c.val)}" aria-label="${esc(c.ph)}"><p class="helper" style="margin:0">${esc(c.help)}</p><p class="ferr" id="fErr" hidden style="padding:8px 0 0"></p></div></div>
+    <div class="mfoot"><button class="primary center" id="fOk">${esc(c.btn)}</button></div></div></div>`;
+  const cancel = () => c.cancel ? c.cancel() : closeLayer();
+  $("#fX").onclick = cancel; $("#scrim").addEventListener("click", e => { if (e.target.id==="scrim") cancel(); });
+  $("#fOk").onclick = () => { const v=$("#fIn").value.trim(); if (!v){ $("#fErr").hidden=false; $("#fErr").textContent=`Enter ${c.ph.toLowerCase()}.`; $("#fIn").setAttribute("aria-invalid","true"); $("#fIn").focus(); return; } c.ok(v); };
+  $("#fIn").addEventListener("keydown", e => { if (e.key==="Enter") $("#fOk").click(); });
+  setTimeout(()=>$("#fIn").focus(),30);
+}
 
 /* ---------- Hours ---------- */
 const HOURS = {0:null,1:["16:00","21:00"],2:["16:00","21:00"],3:["16:00","21:00"],4:["16:00","21:00"],5:["16:00","21:30"],6:["16:00","21:30"]};
@@ -401,7 +432,8 @@ function refreshHours(){
   $("#closedAlert").hidden = open;
   if (!open){ const d=days()[0]; $("#closedText").textContent = `Our store is currently closed. The next available time to place an order is ${d.label} at ${fmtT(d.times[0])}.`; }
   $("#timeLbl").textContent = timeLabel();
-  $("#mDetailsTxt").textContent = `Pickup ${timeLabel()}`;
+  $("#mDetailsTxt").textContent = `${OT().l} · ${timeLabel()}`;
+  $("#typeLbl").textContent = OT().l;
 }
 
 /* ---------- Menu ---------- */
@@ -521,17 +553,21 @@ function dropdown(anchor, html, onClick){
   closeDD();
   const r = anchor.getBoundingClientRect();
   const d = document.createElement("div"); d.className = "dd"; d.id = "dd"; d.setAttribute("role","listbox"); d.innerHTML = html;
-  d.style.position = "fixed"; d.style.top = (r.bottom + 2) + "px"; d.style.left = Math.max(8, Math.min(innerWidth - 260, r.left)) + "px";
-  d.style.maxHeight = Math.max(200, innerHeight - r.bottom - 20) + "px"; d.style.overflow = "auto";
+  d.style.position = "fixed"; d.style.left = Math.max(8, Math.min(innerWidth - 260, r.left)) + "px"; d.style.overflow = "auto"; d.style.visibility = "hidden";
   document.body.appendChild(d);
+  const below = innerHeight - r.bottom - 12, above = r.top - 12, h = d.scrollHeight;
+  if (h <= below || below >= above){ d.style.top = (r.bottom + 2) + "px"; d.style.maxHeight = Math.max(120, below) + "px"; }
+  else { const mh = Math.min(h, above); d.style.top = (r.top - 2 - mh) + "px"; d.style.maxHeight = mh + "px"; }
+  d.style.visibility = "";
   d.addEventListener("click", e => { const b = e.target.closest("button"); if (b && !b.disabled){ onClick(b); closeDD(); } });
 }
 function closeDD(){ const d = $("#dd"); if (d) d.remove(); }
 $("#catBtn").onclick = e => { e.stopPropagation(); dropdown(e.currentTarget, CATS.map(c=>`<button data-c="${c.id}">${esc(c.n)}</button>`).join(""), b => document.getElementById(b.dataset.c).scrollIntoView({behavior:"smooth"})); };
-$("#typeBtn").onclick = e => { e.stopPropagation(); dropdown(e.currentTarget, `<button disabled>Dine In</button><button>✓ Pickup</button><button disabled>Delivery</button><button disabled>Curbside</button>`, ()=>{}); };
+function typeMenu(anchor, after){ dropdown(anchor, OTYPES.map(o=>`<button role="option" data-ot="${o.k}" aria-selected="${o.k===otype}"><span style="width:14px;display:inline-block;color:var(--blue)">${o.k===otype?"✓":""}</span>${esc(o.l)}</button>`).join(""), b => setOtype(b.dataset.ot, after)); }
+$("#typeBtn").onclick = e => { e.stopPropagation(); typeMenu(e.currentTarget); };
 $("#timeBtn").onclick = e => { e.stopPropagation(); dropdown(e.currentTarget, `<button data-t="asap" ${isOpen()?"":"disabled"}>◷ ASAP (${PREP[0]}-${PREP[1]}min)</button><button data-t="sched">▦ Schedule Order</button>`, b => b.dataset.t==="asap" ? (schedule=null, refreshHours()) : openSchedule()); };
 $("#gcNav").onclick = e => { e.stopPropagation(); dropdown(e.currentTarget, `<button>Purchase Gift Card</button><button>Check Balance</button>`, () => info("Gift Cards", "Digital gift card purchase and balance pages come with talech Gift Cards. They are not built in this prototype.")); };
-$("#mDetails").onclick = () => openSchedule();
+$("#mDetails").onclick = e => { e.stopPropagation(); dropdown(e.currentTarget, `<div style="padding:6px 16px 2px;font-size:12px;color:var(--muted)">Order type</div>` + OTYPES.map(o=>`<button role="option" data-ot="${o.k}" aria-selected="${o.k===otype}"><span style="width:14px;display:inline-block;color:var(--blue)">${o.k===otype?"✓":""}</span>${esc(o.l)}</button>`).join("") + `<div style="padding:8px 16px 2px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);margin-top:4px">Order time</div><button data-t="sched">▦ ${esc(timeLabel())}</button>`, b => b.dataset.t ? openSchedule() : setOtype(b.dataset.ot)); };
 document.addEventListener("click", closeDD);
 
 function openSchedule(after){
@@ -539,9 +575,9 @@ function openSchedule(after){
   const render = () => {
     $("#layer").innerHTML = `<div class="scrim" id="scrim"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="sTitle" style="width:min(460px,100%)">
       <button class="xbtn" id="sX" aria-label="Close">×</button>
-      <div class="scroll"><div class="head noimg"><h2 id="sTitle">Order time</h2><p class="desc">Pickup at 4705 Woodstock Road</p></div>
+      <div class="scroll"><div class="head noimg"><h2 id="sTitle">Order time</h2><p class="desc">${esc(OT().l)}${OT().kind==="delivery"?" to "+esc(delivAddr||"your address"):OT().kind==="dinein"?" at 4705 Woodstock Road":" from 4705 Woodstock Road"}</p></div>
         <div class="grp"><div class="gh"><div><b>Schedule Date</b></div></div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${ds.map(d=>`<button class="tip" style="padding:8px 12px" data-day="${d.key}" aria-pressed="${d.key===day.key}">${esc(d.label)}</button>`).join("")}</div></div>
-        <div class="grp"><div class="gh"><div><b>Select pickup time</b></div></div><select class="in" id="sTime" style="margin:10px 0 0">${day.times.map(x=>`<option value="${x}" ${x===t?"selected":""}>${fmtT(x)}</option>`).join("")}</select></div>
+        <div class="grp"><div class="gh"><div><b>Select ${OT().kind==="delivery"?"delivery":OT().kind==="dinein"?"order":"pickup"} time</b></div></div><select class="in" id="sTime" style="margin:10px 0 0">${day.times.map(x=>`<option value="${x}" ${x===t?"selected":""}>${fmtT(x)}</option>`).join("")}</select></div>
       </div>
       <div class="mfoot"><button class="primary center" id="sDone">Done</button></div></div></div>`;
     $("#layer").querySelectorAll("[data-day]").forEach(b => b.onclick = () => { day = ds.find(d=>d.key===b.dataset.day); t = day.times[0]; render(); });
@@ -570,7 +606,7 @@ function openCheckout(){
     <div class="co">
       <form id="coForm" novalidate>
         <h3>Order Details</h3>
-        <button type="button" class="fbox" disabled><span>🛍</span><span><small>Order type</small><b>Pickup</b></span></button>
+        <button type="button" class="fbox" id="coType" aria-haspopup="listbox"><span>🛍</span><span><small>Order type</small><b>${esc(OT().l)}</b></span><span class="chev">⌄</span></button>${OT().kind==="dinein"?`<button type="button" class="fbox" id="coDetail"><span>⌗</span><span><small>Table</small><b>${esc(otDetail())}</b></span><span class="chev">›</span></button>`:""}${OT().kind==="delivery"?`<button type="button" class="fbox" id="coDetail"><span>⌖</span><span><small>Deliver to</small><b>${esc(otDetail())}</b></span><span class="chev">›</span></button><input class="in" id="cDNote" placeholder="Delivery instructions (optional)" value="${esc(delivNote)}">`:""}
         <button type="button" class="fbox" id="coTime"><span>◷</span><span><small>Order time</small><b class="num">${esc(timeLabel())}</b></span><span class="chev">⌄</span></button>
         <h3>Contact Info</h3>
         <div class="pair"><input class="in" id="cF" placeholder="First name" autocomplete="given-name" value="${esc(guest.f)}"><input class="in" id="cL" placeholder="Last name" autocomplete="family-name" value="${esc(guest.l)}"></div>
@@ -584,7 +620,7 @@ function openCheckout(){
         <div class="applyRow"><input class="in" id="cGift" placeholder="Gift card number (optional)"><button type="button" id="giftApply">Apply</button></div>
         <h3>Payment <button class="pin" data-pin="8" aria-label="Improvement 8"></button></h3>
         <label class="radio"><input type="radio" name="pay" value="online" ${payMode==="online"?"checked":""}>Pay Online</label>
-        <label class="radio"><input type="radio" name="pay" value="store" ${payMode==="store"?"checked":""}>Pay In Store</label>
+        ${OT().kind!=="delivery"?`<label class="radio"><input type="radio" name="pay" value="store" ${payMode==="store"?"checked":""}>Pay In Store</label>`:""}
         ${payMode==="online" ? `
           <button type="button" class="apple" id="applePay">Buy with Apple Pay</button>
           <p class="helper" style="margin:4px 0 0">Shown on Apple devices. After clicking “Buy with Apple Pay” you will be redirected to Apple Pay to complete your purchase securely.</p>
@@ -593,13 +629,13 @@ function openCheckout(){
           <div class="pair"><input class="in" placeholder="Card number" readonly tabindex="-1" autocomplete="off" style="flex:2" aria-label="Card number"><input class="in" placeholder="MM/YY" readonly tabindex="-1" autocomplete="off" style="flex:1" aria-label="MM/YY, Month and Year"><input class="in" placeholder="CVV" readonly tabindex="-1" autocomplete="off" style="flex:1" aria-label="CVV"></div>
           <input class="in" placeholder="Address line 1" readonly tabindex="-1" autocomplete="off" aria-label="Address line 1"><input class="in" placeholder="Zip code" readonly tabindex="-1" inputmode="numeric" autocomplete="off" aria-label="Zip code">
           <p class="helper">Card entry runs in Elavon Converge hosted fields. Demo only: these fields are disabled and no card data can be entered.</p>`
-          : `<p class="helper">You'll pay when you arrive at the store to receive your order.</p>`}
+          : `<p class="helper">${OT().kind==="dinein"?"You'll pay at the restaurant before you leave.":"You'll pay when you arrive at the store to receive your order."}</p>`}
         <p class="ferr" id="coErr" hidden style="padding:0 0 8px"></p>
         <button type="submit" class="primary center" id="placeBtn" style="width:100%">${payMode==="online"?"Confirm Payment":"Place Order"}</button>
-        <p class="disclaim">${payMode==="online"?`By pressing 'Place Order' you are authorizing a payment of ${money(s.total)} on the credit or debit card entered above.`:"Pay the total at pickup."}</p>
+        <p class="disclaim">${payMode==="online"?`By pressing 'Place Order' you are authorizing a payment of ${money(s.total)} on the credit or debit card entered above.`:OT().kind==="dinein"?"Pay the total in the restaurant.":"Pay the total at pickup."}</p>
       </form>
       <div class="side">
-        <div class="box"><div class="map" aria-hidden="true"></div><div class="brow"><span>Order From</span><span class="v"><a href="#" onclick="return false">LUCIA'S ITALIAN</a>4705 WOODSTOCK ROAD</span></div><div class="brow"><span>Your order will be ready in</span><span class="v num">${schedule?esc(timeLabel()):PREP[0]+"-"+PREP[1]+"min"}</span></div></div>
+        <div class="box"><div class="map" aria-hidden="true"></div><div class="brow"><span>Order From</span><span class="v"><a href="#" onclick="return false">LUCIA'S ITALIAN</a>4705 WOODSTOCK ROAD</span></div><div class="brow"><span>${(OT().kind==="delivery"?"Your order will be delivered":"Your order will be ready")+(schedule?":":" in")}</span><span class="v num">${schedule?esc(timeLabel()):PREP[0]+"-"+PREP[1]+"min"}</span></div></div>
         <div class="box"><div class="boxhead"><b>Your Order</b><button class="linkbtn" id="backMenu">Return to Menu</button></div>
           <div id="coLines">${cart.map(lineHTML).join("")}</div>
           <div class="promo"><div class="applyRow"><input class="in" id="cPromo" placeholder="Enter a promo code (optional)" value="${esc(promo)}"><button type="button" id="promoApply">Apply</button></div><p class="helper" id="promoMsg" style="margin:6px 0 0" hidden></p></div>
@@ -607,7 +643,7 @@ function openCheckout(){
         </div>
       </div>
     </div></div></div>`;
-  const keep = () => { guest = {f:$("#cF").value, l:$("#cL").value, p:$("#cP").value, e:$("#cE").value}; promo = $("#cPromo").value; if ($("#cTip")) customTip = parseFloat($("#cTip").value)||0; };
+  const keep = () => { guest = {f:$("#cF").value, l:$("#cL").value, p:$("#cP").value, e:$("#cE").value}; promo = $("#cPromo").value; if ($("#cDNote")) delivNote = $("#cDNote").value; if ($("#cTip")) customTip = parseFloat($("#cTip").value)||0; };
   const L = $("#layer");
   bindLines(L, () => { keep(); openCheckout(); });
   L.querySelectorAll("[data-tip]").forEach(b => b.onclick = () => { keep(); tipPct = b.dataset.tip==="custom" ? "custom" : +b.dataset.tip; openCheckout(); });
@@ -615,6 +651,8 @@ function openCheckout(){
   $("#clearTip").onclick = () => { keep(); tipPct = null; customTip = 0; openCheckout(); };
   L.querySelectorAll("input[name=pay]").forEach(r => r.onchange = () => { keep(); payMode = r.value; openCheckout(); });
   $("#coTime").onclick = () => { keep(); openSchedule(openCheckout); };
+  $("#coType").onclick = e => { e.stopPropagation(); keep(); typeMenu(e.currentTarget, openCheckout); };
+  if ($("#coDetail")) $("#coDetail").onclick = () => { keep(); setOtype(otype, openCheckout); };
   $("#backMenu").onclick = () => { keep(); closeLayer(); };
   $("#promoApply").onclick = () => { const m=$("#promoMsg"); m.hidden=false; m.textContent = $("#cPromo").value.trim() ? "Promo codes are set up as talech promotions. None are active in this prototype." : "Enter a promo code."; };
   $("#giftApply").onclick = () => { const m=$("#coErr"); m.hidden=false; m.textContent="talech Gift Card balances apply here. No gift cards exist in this prototype."; };
@@ -627,20 +665,22 @@ function place(method){
   [f,l,p,e].forEach(x=>x.removeAttribute("aria-invalid"));
   if (!f.value.trim()) bad.push([f,"first name"]); if (!l.value.trim()) bad.push([l,"last name"]);
   if (p.value.replace(/\D/g,"").length<10) bad.push([p,"phone number"]); if (!/^\S+@\S+\.\S+$/.test(e.value)) bad.push([e,"email address"]);
+  if (OT().kind==="dinein" && !tableNo){ const m=$("#coErr"); m.hidden=false; m.textContent="Enter your table number."; return; }
+  if (OT().kind==="delivery" && !delivAddr){ const m=$("#coErr"); m.hidden=false; m.textContent="Enter a delivery address."; return; }
   if (bad.length){ bad.forEach(([x])=>x.setAttribute("aria-invalid","true")); const m=$("#coErr"); m.hidden=false; m.textContent="Enter your " + bad.map(b=>b[1]).join(", ") + "."; bad[0][0].focus(); return; }
   const base = sums(), tip = tipAmt(base.sub), s = sums(tip);
-  const order = {no: String(Math.floor(100000+Math.random()*899999)), first:f.value.trim(), email:e.value.trim(), items:cart.map(x=>({...x})), s, method, when: schedule ? timeLabel() : `Today, ${PREP[0]}-${PREP[1]} min`};
+  const order = {no: String(Math.floor(100000+Math.random()*899999)), first:f.value.trim(), email:e.value.trim(), items:cart.map(x=>({...x})), s, method, ot:OT(), detail:otDetail(), dnote:delivNote, when: schedule ? timeLabel() : `Today, ${PREP[0]}-${PREP[1]} min`};
   cart = []; save(); renderMenu(); watchCats();
   openStatus(order);
 }
 function openStatus(o){
-  const steps = ["Received","Accepted","In Progress","Ready","Completed"]; let st = 0;
+  const steps = o.ot.kind==="delivery" ? ["Received","Accepted","In Progress","Out for delivery","Delivered"] : ["Received","Accepted","In Progress","Ready","Completed"]; let st = 0;
   const render = () => {
     $("#layer").innerHTML = `<div class="page" role="dialog" aria-modal="true" aria-labelledby="osTitle"><div class="wrap status">
       <h1 id="osTitle">Thank you, ${esc(o.first)}! <button class="pin" data-pin="10" aria-label="Improvement 10"></button></h1>
       <p style="margin:8px 0 0">Your order <b class="num">#${o.no}</b> has been received.</p>
       <p style="margin:6px 0 0;color:var(--muted)">Your order details have been emailed to <b>${esc(o.email)}</b>. An additional email will be sent when your order is ready.</p>
-      <div class="sbox"><div style="color:var(--muted);font-size:14px">Your Pickup order will be ready:</div><div class="ready num">${esc(o.when)}</div></div>
+      <div class="sbox"><div style="color:var(--muted);font-size:14px">${o.ot.kind==="delivery"?"Your order will be delivered:":`Your ${esc(o.ot.l)} order will be ready:`}</div><div class="ready num">${esc(o.when)}</div>${o.detail?`<div style="margin-top:6px">${o.ot.kind==="delivery"?"Deliver to: ":""}${esc(o.detail)}</div>`:""}${o.dnote?`<div style="color:var(--muted);font-size:14px;margin-top:4px">Delivery instructions: ${esc(o.dnote)}</div>`:""}</div>
       <div class="sbox"><h3>Order Tracking <button class="pin" data-pin="11" aria-label="Improvement 11"></button></h3><div class="track">${steps.map((x,i)=>`<div class="${i<=st?"done":""}">${x}</div>`).join("")}</div><p class="helper" style="margin:14px 0 0">Status updates as staff accept, send to the kitchen and mark the order ready in talech Register. Prototype: steps advance on their own.</p></div>
       <div class="sbox"><h3>Order Summary</h3>${o.items.map(l=>`<div class="tr"><span>${l.qty}× ${esc(l.name)}${l.mods.length?` <span style="color:var(--muted)">(${esc(l.mods.join(", "))})</span>`:""}</span><span class="num">${money(l.unit*l.qty)}</span></div>`).join("")}
         <div class="tr b" style="margin-top:10px"><span>Subtotal</span><span class="num">${money(o.s.sub)}</span></div><div class="tr"><span>Taxes</span><span class="num">${money(o.s.tax)}</span></div>${o.s.tip?`<div class="tr"><span>Tip</span><span class="num">${money(o.s.tip)}</span></div>`:""}<div class="tr big"><span>Total</span><span class="num">${money(o.s.total)}</span></div></div>
