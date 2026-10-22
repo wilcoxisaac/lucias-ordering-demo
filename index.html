@@ -53,6 +53,24 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .dd button:hover{background:var(--alt)}
 .dd button[disabled]{color:var(--disabled);cursor:not-allowed}
 .dd button[disabled]:hover{background:none}
+.oic{width:22px;height:22px;flex:none;color:var(--muted)}
+.dd .otOpt{padding:12px 16px;gap:12px;border-bottom:2px solid transparent}
+.dd .otOpt .oic{width:22px;height:22px;color:var(--muted);flex:none}
+.dd .otOpt[aria-selected="true"]{background:var(--alt);border-bottom-color:var(--blue)}
+.dd .ddHead{padding:8px 16px 4px;font-size:12px;color:var(--muted)}
+.ofield .ic.ot{color:var(--muted)}
+.fmodal{width:min(476px,100%);border-radius:10px}
+.fmodal .fhead{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;padding:14px 14px;border-bottom:1px solid var(--line)}
+.fmodal .fhead h2{font-size:15.5px;font-weight:600;text-align:center}
+.fmodal .fx{width:36px;height:36px;border:2px solid var(--blue);border-radius:8px;display:grid;place-items:center;color:var(--ink)}
+.fmodal .fbody{padding:22px 30px 30px}
+.fmodal .fbody h3{font-size:24px;font-weight:700;margin:0 0 20px;line-height:1.25}
+.fwrap{position:relative}
+.fwrap .in{height:54px;margin:0;padding-right:44px}
+.fhelp{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:28px;height:28px;display:grid;place-items:center;color:var(--blue);border-radius:50%}
+.fhelp svg{width:18px;height:18px}
+.ftip{margin:8px 0 0;font-size:13px;color:var(--muted);background:var(--alt);border-radius:6px;padding:8px 10px}
+.fmodal .primary{width:100%;margin-top:30px}
 
 /* Banner announcement */
 .banner{background:var(--blue-soft);position:relative}
@@ -299,7 +317,7 @@ footer .f2 a{color:var(--muted)}
   <div class="wrap">
     <button class="ofield showM" id="mDetails"><span><small>Order details</small><b id="mDetailsTxt">Take Out</b></span><span class="chev">›</span></button>
     <button class="ofield" id="catBtn" aria-haspopup="listbox"><span><small>Category</small><b id="catLbl">Family Meal Deals</b></span><span class="chev">⌄</span></button>
-    <button class="ofield hideM" id="typeBtn" aria-haspopup="listbox"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg><span><small>Order type</small><b id="typeLbl">Take Out</b></span><span class="chev">⌄</span></button>
+    <button class="ofield hideM" id="typeBtn" aria-haspopup="listbox"><span id="typeIc" style="display:flex"></span><span><small>Order type</small><b id="typeLbl">Take Out</b></span><span class="chev">⌄</span></button>
     <button class="ofield hideM" id="timeBtn" aria-haspopup="listbox"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span><small>Order time</small><b id="timeLbl">ASAP (25-40min)</b></span><span class="chev">⌄</span></button>
     <span class="spacer"></span>
     <button class="cartBtn empty" id="cartBtn" aria-label="Cart total $0.00, item count 0"><span class="seg1">🛒 <span id="cartCount">0 Items</span></span><span class="seg2 num" id="cartTotal">$0.00</span></button>
@@ -376,6 +394,16 @@ const priceLabel = i => i.v.length ? money(Math.min(...i.v.map(v=>v.p))) + "+" :
 let cart = store.get("lucia2.cart", []);
 let schedule = null;   // null = ASAP, else {day,label,t}
 /* Order types: each is a talech order type the merchant enables in Online Ordering Settings; the label is the merchant's own name for it. Only one can be selected. */
+/* Line icons, 24px grid, 1.6 stroke, one per order type */
+const svgI = (d, cls="oic") => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const OICON = {
+  dinein:   '<path d="M3.5 9.5 5 4.5h14l1.5 5"/><path d="M3.5 9.5a2.1 2.1 0 0 0 4.2 0 2.1 2.1 0 0 0 4.3 0 2.1 2.1 0 0 0 4.3 0 2.1 2.1 0 0 0 4.2 0"/><path d="M5 11.5v8h14v-8"/><path d="M10 19.5v-4.5h4v4.5"/>',
+  takeout:  '<path d="M5.5 8h13l-1 12h-11z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/><path d="M9.5 12.5h5"/>',
+  catering: '<path d="M3 17h18"/><path d="M4.5 17a7.5 7.5 0 0 1 15 0"/><path d="M12 9.5V8"/><path d="M10.5 8h3"/><path d="M2.5 19.5h19"/>',
+  delivery: '<path d="M2.5 6.5h11v9.5h-11z"/><path d="M13.5 9.5h4l3 3.5v3h-7"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/>',
+  curbside: '<path d="M5 15.5v-3l1.6-4.2A2 2 0 0 1 8.5 7h7a2 2 0 0 1 1.9 1.3l1.6 4.2v3"/><path d="M4 12.5h16"/><path d="M4.5 15.5h15v2.5h-15z"/><path d="M7 18v1.5M17 18v1.5"/><circle cx="7.8" cy="14" r=".6"/><circle cx="16.2" cy="14" r=".6"/>'
+};
+const otIcon = (k, cls) => svgI(OICON[k], cls);
 const OTYPES = [
   {k:"dinein",   l:"Dine In",              kind:"dinein"},
   {k:"takeout",  l:"Take Out",             kind:"pickup"},
@@ -386,22 +414,26 @@ const OTYPES = [
 let otype = store.get("lucia2.otype", "takeout"); if (!OTYPES.some(o=>o.k===otype)) otype = "takeout";
 let tableNo = store.get("lucia2.table", ""), delivAddr = store.get("lucia2.addr", ""), delivNote = "";
 const OT = () => OTYPES.find(o=>o.k===otype);
+const otLabel = () => OT().kind==="dinein" && tableNo ? `${OT().l} - Table ${tableNo}` : OT().l;
 function otDetail(){ const o=OT(); return o.kind==="dinein" ? (tableNo?`Table ${tableNo}`:"No table number entered") : o.kind==="delivery" ? (delivAddr||"No address selected") : ""; }
 function setOtype(k, after){
   const o = OTYPES.find(x=>x.k===k); if (!o) return;
   const done = () => { otype = k; store.set("lucia2.otype", otype); if (o.kind!=="delivery" && payMode==="none") payMode="online"; if (o.kind==="delivery") payMode="online"; refreshHours(); after ? after() : closeLayer(); };
-  if (o.kind==="dinein") return askField({title:"Dine In", heading:"Enter your table number", ph:"Table number", help:"If you are unable to find your table number, please ask an employee for more information", val:tableNo, btn:"Done", ok:v=>{ tableNo=v; store.set("lucia2.table", v); done(); }, cancel:after});
+  if (o.kind==="dinein") return askField({title:"Dine In", heading:"Enter your table number", ph:"Table number", help:"If you are unable to find your table number, please ask an employee for more information", val:tableNo, btn:"Continue Order", ok:v=>{ tableNo=v; store.set("lucia2.table", v); done(); }, cancel:after});
   if (o.kind==="delivery") return askField({title:"Delivery Address", heading:"Deliver to", ph:"Enter delivery address", help:"Delivery is available within the delivery area Lucia's sets in talech.", val:delivAddr, btn:"Deliver to this address", ok:v=>{ delivAddr=v; store.set("lucia2.addr", v); done(); }, cancel:after});
   done();
 }
 function askField(c){
-  $("#layer").innerHTML = `<div class="scrim" id="scrim"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="fTitle" style="width:min(460px,100%)">
-    <button class="xbtn" id="fX" aria-label="Close">×</button>
-    <div class="scroll"><div class="head noimg"><h2 id="fTitle">${esc(c.title)}</h2></div>
-      <div class="grp" style="border:0"><b style="font-weight:600">${esc(c.heading)}</b><input class="in" id="fIn" style="margin:10px 0 6px" placeholder="${esc(c.ph)}" value="${esc(c.val)}" aria-label="${esc(c.ph)}"><p class="helper" style="margin:0">${esc(c.help)}</p><p class="ferr" id="fErr" hidden style="padding:8px 0 0"></p></div></div>
-    <div class="mfoot"><button class="primary center" id="fOk">${esc(c.btn)}</button></div></div></div>`;
+  $("#layer").innerHTML = `<div class="scrim" id="scrim"><div class="modal fmodal" role="dialog" aria-modal="true" aria-labelledby="fTitle">
+    <div class="fhead"><button class="fx" id="fX" aria-label="Close">${svgI('<path d="M6 6l12 12M18 6 6 18"/>','')}</button><h2 id="fTitle">${esc(c.title)}</h2><span></span></div>
+    <div class="fbody"><h3>${esc(c.heading)}</h3>
+      <div class="fwrap"><input class="in" id="fIn" placeholder="${esc(c.ph)}" value="${esc(c.val)}" aria-label="${esc(c.ph)}" aria-describedby="fTip" autocomplete="off"><button type="button" class="fhelp" id="fHelp" aria-label="Help" aria-expanded="false">${svgI('<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2-2.4 3.6"/><circle cx="12" cy="17" r=".5"/>','')}</button></div>
+      <p class="ftip" id="fTip" hidden>${esc(c.help)}</p>
+      <p class="ferr" id="fErr" hidden style="padding:8px 0 0"></p>
+      <button class="primary center" id="fOk">${esc(c.btn)}</button></div></div></div>`;
   const cancel = () => c.cancel ? c.cancel() : closeLayer();
   $("#fX").onclick = cancel; $("#scrim").addEventListener("click", e => { if (e.target.id==="scrim") cancel(); });
+  $("#fHelp").onclick = () => { const tp=$("#fTip"); tp.hidden=!tp.hidden; $("#fHelp").setAttribute("aria-expanded", String(!tp.hidden)); };
   $("#fOk").onclick = () => { const v=$("#fIn").value.trim(); if (!v){ $("#fErr").hidden=false; $("#fErr").textContent=`Enter ${c.ph.toLowerCase()}.`; $("#fIn").setAttribute("aria-invalid","true"); $("#fIn").focus(); return; } c.ok(v); };
   $("#fIn").addEventListener("keydown", e => { if (e.key==="Enter") $("#fOk").click(); });
   setTimeout(()=>$("#fIn").focus(),30);
@@ -432,8 +464,9 @@ function refreshHours(){
   $("#closedAlert").hidden = open;
   if (!open){ const d=days()[0]; $("#closedText").textContent = `Our store is currently closed. The next available time to place an order is ${d.label} at ${fmtT(d.times[0])}.`; }
   $("#timeLbl").textContent = timeLabel();
-  $("#mDetailsTxt").textContent = `${OT().l} · ${timeLabel()}`;
-  $("#typeLbl").textContent = OT().l;
+  $("#mDetailsTxt").textContent = `${otLabel()} · ${timeLabel()}`;
+  $("#typeLbl").textContent = otLabel();
+  $("#typeIc").innerHTML = otIcon(otype, "ic ot");
 }
 
 /* ---------- Menu ---------- */
@@ -563,11 +596,11 @@ function dropdown(anchor, html, onClick){
 }
 function closeDD(){ const d = $("#dd"); if (d) d.remove(); }
 $("#catBtn").onclick = e => { e.stopPropagation(); dropdown(e.currentTarget, CATS.map(c=>`<button data-c="${c.id}">${esc(c.n)}</button>`).join(""), b => document.getElementById(b.dataset.c).scrollIntoView({behavior:"smooth"})); };
-function typeMenu(anchor, after){ dropdown(anchor, OTYPES.map(o=>`<button role="option" data-ot="${o.k}" aria-selected="${o.k===otype}"><span style="width:14px;display:inline-block;color:var(--blue)">${o.k===otype?"✓":""}</span>${esc(o.l)}</button>`).join(""), b => setOtype(b.dataset.ot, after)); }
+function typeMenu(anchor, after){ dropdown(anchor, OTYPES.map(o=>`<button class="otOpt" role="option" data-ot="${o.k}" aria-selected="${o.k===otype}">${otIcon(o.k)}<span>${esc(o.l)}</span></button>`).join(""), b => setOtype(b.dataset.ot, after)); }
 $("#typeBtn").onclick = e => { e.stopPropagation(); typeMenu(e.currentTarget); };
 $("#timeBtn").onclick = e => { e.stopPropagation(); dropdown(e.currentTarget, `<button data-t="asap" ${isOpen()?"":"disabled"}>◷ ASAP (${PREP[0]}-${PREP[1]}min)</button><button data-t="sched">▦ Schedule Order</button>`, b => b.dataset.t==="asap" ? (schedule=null, refreshHours()) : openSchedule()); };
 $("#gcNav").onclick = e => { e.stopPropagation(); dropdown(e.currentTarget, `<button>Purchase Gift Card</button><button>Check Balance</button>`, () => info("Gift Cards", "Digital gift card purchase and balance pages come with talech Gift Cards. They are not built in this prototype.")); };
-$("#mDetails").onclick = e => { e.stopPropagation(); dropdown(e.currentTarget, `<div style="padding:6px 16px 2px;font-size:12px;color:var(--muted)">Order type</div>` + OTYPES.map(o=>`<button role="option" data-ot="${o.k}" aria-selected="${o.k===otype}"><span style="width:14px;display:inline-block;color:var(--blue)">${o.k===otype?"✓":""}</span>${esc(o.l)}</button>`).join("") + `<div style="padding:8px 16px 2px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);margin-top:4px">Order time</div><button data-t="sched">▦ ${esc(timeLabel())}</button>`, b => b.dataset.t ? openSchedule() : setOtype(b.dataset.ot)); };
+$("#mDetails").onclick = e => { e.stopPropagation(); dropdown(e.currentTarget, `<div class="ddHead">Order type</div>` + OTYPES.map(o=>`<button class="otOpt" role="option" data-ot="${o.k}" aria-selected="${o.k===otype}">${otIcon(o.k)}<span>${esc(o.l)}</span></button>`).join("") + `<div class="ddHead" style="border-top:1px solid var(--line);margin-top:4px;padding-top:10px">Order time</div><button data-t="sched">${svgI('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')}<span>${esc(timeLabel())}</span></button>`, b => b.dataset.t ? openSchedule() : setOtype(b.dataset.ot)); };
 document.addEventListener("click", closeDD);
 
 function openSchedule(after){
@@ -606,7 +639,7 @@ function openCheckout(){
     <div class="co">
       <form id="coForm" novalidate>
         <h3>Order Details</h3>
-        <button type="button" class="fbox" id="coType" aria-haspopup="listbox"><span>🛍</span><span><small>Order type</small><b>${esc(OT().l)}</b></span><span class="chev">⌄</span></button>${OT().kind==="dinein"?`<button type="button" class="fbox" id="coDetail"><span>⌗</span><span><small>Table</small><b>${esc(otDetail())}</b></span><span class="chev">›</span></button>`:""}${OT().kind==="delivery"?`<button type="button" class="fbox" id="coDetail"><span>⌖</span><span><small>Deliver to</small><b>${esc(otDetail())}</b></span><span class="chev">›</span></button><input class="in" id="cDNote" placeholder="Delivery instructions (optional)" value="${esc(delivNote)}">`:""}
+        <button type="button" class="fbox" id="coType" aria-haspopup="listbox"><span style="display:flex;color:var(--muted)">${otIcon(otype,"oic")}</span><span><small>Order type</small><b>${esc(otLabel())}</b></span><span class="chev">⌄</span></button>${OT().kind==="dinein"?`<button type="button" class="fbox" id="coDetail"><span>⌗</span><span><small>Table</small><b>${esc(otDetail())}</b></span><span class="chev">›</span></button>`:""}${OT().kind==="delivery"?`<button type="button" class="fbox" id="coDetail"><span>⌖</span><span><small>Deliver to</small><b>${esc(otDetail())}</b></span><span class="chev">›</span></button><input class="in" id="cDNote" placeholder="Delivery instructions (optional)" value="${esc(delivNote)}">`:""}
         <button type="button" class="fbox" id="coTime"><span>◷</span><span><small>Order time</small><b class="num">${esc(timeLabel())}</b></span><span class="chev">⌄</span></button>
         <h3>Contact Info</h3>
         <div class="pair"><input class="in" id="cF" placeholder="First name" autocomplete="given-name" value="${esc(guest.f)}"><input class="in" id="cL" placeholder="Last name" autocomplete="family-name" value="${esc(guest.l)}"></div>
